@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.4.22 <0.9.0;
+
+contract Saver {
+    struct Saver {
+        string username;
+        string password;
+    }
+
+    mapping(string => Saver) savers;
+
+    function registerSaver(string memory _username, string memory _password) public {
+        Saver memory newSaver = Saver({
+            username: _username,
+            password: _password
+        });
+
+        savers[_username] = newSaver;
+    }
+
+    function getSaver(string memory _username) public view returns (string memory, string memory) {
+        return (savers[_username].username, savers[_username].password);
+    }
+}
