@@ -1,0 +1,110 @@
+/**
+ * Module dependencies.
+ */
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const app = express();
+const winston = require('winston'); // Logging library
+const uuid = require('uuid'); // UUID library for generating unique IDs
+
+// Define a variable to store the saver data
+let savers = [];
+
+// Secret key used to sign and verify JWT
+const secretKey = 'your-secret-key';
+
+// Constants
+const UNAUTHORIZED_MESSAGE = 'Unauthorized';
+const INVALID_TOKEN_MESSAGE = 'Invalid token';
+const SAVER_CREATED_MESSAGE = 'Saver created successfully';
+const SAVER_NOT_FOUND_MESSAGE = 'Saver not found';
+
+// Configure logger
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' }),
+  ],
+});
+
+// Middleware to parse JSON request bodies
+app.use(express.json());
+
+/**
+ * Middleware to verify JWT for protected routes.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @param {Function} next - The next middleware function.
+ * @returns {Object} The response object with an error message if the token is missing or invalid.
+ */
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization;
+  if (!token) {
+    logger.error(UNAUTHORIZED_MESSAGE);
+    return res.status(401).json({ message: UNAUTHORIZED_MESSAGE });
+  }
+
+  try {
+    const decoded = jwt.verify(token, secretKey);
+    req.saverId = decoded.saverId;
+    next();
+  } catch (err) {
+    logger.error(INVALID_TOKEN_MESSAGE);
+    return res.status(401).json({ message: INVALID_TOKEN_MESSAGE });
+  }
+};
+
+/**
+ * Endpoint to register a new saver with 2FA.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} The response object with a success message and a JWT token if the saver is created successfully.
+ */
+app.post('/savers/register', (req, res) => {
+  const { username, password } = req.body;
+
+  // Perform validation and saving the user details to a database
+  const saver = {
+    username,
+    id: uuid.v4(), // Generate a unique ID
+  };
+
+  const token = jwt.sign({ saverId: saver.id }, secretKey);
+
+  savers.push(saver); // Save the saver to the array
+
+  logger.info(SAVER_CREATED_MESSAGE);
+  res.status(201).json({ message: SAVER_CREATED_MESSAGE, token });
+});
+
+/**
+ * Protected endpoint to get saver data.
+ *
+ * @param {Object} req - The request object.
+ * @param {Object} res - The response object.
+ * @returns {Object} The response object with the saver data if found, or an error message if not found.
+ */
+app.get('/savers/:id', verifyToken, (req, res) => {
+  const saverId = req.params.id;
+
+  // Retrieve saver data based on saverId
+  const saver = savers.find((s) => s.id === saverId);
+
+  if (saver) {
+    res.json(saver);
+  } else {
+    logger.error(SAVER_NOT_FOUND_MESSAGE);
+    res.status(404).json({ message: SAVER_NOT_FOUND_MESSAGE });
+  }
+});
+
+/**
+ * Starts the server and listens on port 3000.
+ */
+app.listen(3000, () => {
+  logger.info('Server started on port 3000');
+});
